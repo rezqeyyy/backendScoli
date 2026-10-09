@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -16,6 +17,9 @@ import (
 var (
 	cfg    *Config
 	engine *Engine
+	// Membatasi jumlah gambar yang dianalisis bersamaan supaya pemakaian memori terjaga
+	// di server kecil (misalnya 512 MB). Permintaan lain menunggu giliran.
+	slots chan struct{}
 )
 
 func envOr(key, def string) string {
@@ -40,8 +44,12 @@ func main() {
 	modelsDir := envOr("MODELS_DIR", "models")
 	libPath := envOr("ONNXRUNTIME_LIB", defaultLibPath())
 	port := envOr("PORT", "3000")
+	maxConcurrent, err := strconv.Atoi(envOr("MAX_CONCURRENT", "2"))
+	if err != nil || maxConcurrent < 1 {
+		maxConcurrent = 2
+	}
+	slots = make(chan struct{}, maxConcurrent)
 
-	var err error
 	if cfg, err = LoadConfig(filepath.Join(modelsDir, "pipeline_config.json")); err != nil {
 		log.Fatalf("Gagal memuat konfigurasi: %v", err)
 	}
@@ -75,7 +83,9 @@ func handleDetection(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"status": "error", "message": "Gagal membaca gambar."})
 	}
 
+	slots <- struct{}{}
 	result, err := Analyze(data)
+	<-slots
 	if err != nil {
 		log.Printf("analisis gagal: %v", err)
 		return c.Status(500).JSON(fiber.Map{"status": "error", "message": "Terjadi kesalahan saat menganalisis gambar."})
@@ -133,11 +143,11 @@ func riskFromProbs(probs []float64) (*float64, string) {
 
 // Analyze: gambar -> validasi -> YOLOv8 Pose -> fitur postur -> MLP -> hasil.
 func Analyze(data []byte) (*Result, error) {
-	img, err := decodeImage(data)
+	img, origW, origH, err := decodeImage(data)
 	if err != nil {
 		return &Result{Status: "invalid_image", Message: "Gambar tidak bisa dibaca. Gunakan JPEG atau PNG."}, nil
 	}
-	if ok, reason := validateInput(img, cfg.InputGuard); !ok {
+	if ok, reason := validateInput(img, origW, origH, cfg.InputGuard); !ok {
 		return &Result{Status: "invalid_image", Message: reason}, nil
 	}
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"path/filepath"
 	"strings"
@@ -35,6 +36,10 @@ func NewEngine(cfg *Config, libPath, modelsDir string) (*Engine, error) {
 			hint = " (arsitektur onnxruntime.dll tidak cocok dengan hasil `go env GOARCH`)"
 		}
 		return nil, fmt.Errorf("gagal memuat ONNX Runtime dari %q%s: %w", libPath, hint, err)
+	}
+	// ONNX Runtime bisa mengirim data pemakaian ke Microsoft; tidak diperlukan di sini.
+	if err := ort.DisableTelemetry(); err != nil {
+		log.Printf("telemetri ONNX Runtime tidak bisa dimatikan: %v", err)
 	}
 
 	e := &Engine{cfg: cfg, poseRows: 4 + len(cfg.ClassNames) + cfg.NumKpts()*cfg.KptDim()}

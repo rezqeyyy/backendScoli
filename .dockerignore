@@ -1,0 +1,5 @@
+.git
+*.dll
+*.pt
+*.exe
+models/test_vectors.json

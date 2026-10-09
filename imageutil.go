@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/jpeg"
 	_ "image/png"
 	"math"
@@ -12,26 +13,84 @@ import (
 	"golang.org/x/image/draw"
 )
 
-const maxPixels = 64_000_000 // 64 megapiksel
+const (
+	maxPixels   = 64_000_000 // 64 megapiksel
+	maxWorkSide = 1280       // sisi terpanjang gambar kerja; model hanya butuh 640x640
+)
 
 // decodeImage membaca JPEG/PNG menjadi RGBA dan menerapkan orientasi EXIF.
 // Foto dari kamera ponsel sering disimpan "miring" dengan tanda orientasi di EXIF;
 // tanpa langkah ini model akan menerima punggung yang rebah.
-func decodeImage(data []byte) (*image.RGBA, error) {
+//
+// Foto besar langsung diperkecil dengan faktor bulat (rata-rata blok piksel), sehingga
+// foto 12 megapiksel tidak pernah disimpan utuh sebagai RGBA. Gambar sampai 1280 piksel
+// (termasuk gambar dataset 640x640) tidak diubah. Mengembalikan gambar kerja serta lebar
+// dan tinggi asli.
+func decodeImage(data []byte) (*image.RGBA, int, int, error) {
 	// Tolak dimensi yang tidak wajar sebelum mengalokasikan memori untuk seluruh piksel.
 	if c, _, err := image.DecodeConfig(bytes.NewReader(data)); err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	} else if c.Width*c.Height > maxPixels {
-		return nil, fmt.Errorf("gambar %dx%d terlalu besar", c.Width, c.Height)
+		return nil, 0, 0, fmt.Errorf("gambar %dx%d terlalu besar", c.Width, c.Height)
 	}
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
 	b := src.Bounds()
-	rgba := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	draw.Draw(rgba, rgba.Bounds(), src, b.Min, draw.Src)
-	return applyOrientation(rgba, exifOrientation(data)), nil
+	w, h := b.Dx(), b.Dy()
+	var rgba *image.RGBA
+	if f := (max(w, h) + maxWorkSide - 1) / maxWorkSide; f > 1 {
+		rgba = shrink(src, f)
+	} else {
+		rgba = image.NewRGBA(image.Rect(0, 0, w, h))
+		draw.Draw(rgba, rgba.Bounds(), src, b.Min, draw.Src)
+	}
+	o := exifOrientation(data)
+	if o >= 5 { // orientasi 5-8 menukar lebar dan tinggi
+		w, h = h, w
+	}
+	return applyOrientation(rgba, o), w, h, nil
+}
+
+// shrink memperkecil gambar dengan faktor bulat f: tiap piksel hasil = rata-rata blok f x f.
+func shrink(src image.Image, f int) *image.RGBA {
+	b := src.Bounds()
+	dw, dh := b.Dx()/f, b.Dy()/f
+	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
+	ycc, _ := src.(*image.YCbCr) // hasil decode JPEG; dibaca langsung tanpa alokasi per piksel
+	acc := make([]uint32, 3*dw)
+	n := uint32(f * f)
+	for dy := 0; dy < dh; dy++ {
+		clear(acc)
+		for yy := 0; yy < f; yy++ {
+			sy := b.Min.Y + dy*f + yy
+			for dx := 0; dx < dw; dx++ {
+				for xx := 0; xx < f; xx++ {
+					sx := b.Min.X + dx*f + xx
+					var r, g, bl uint8
+					if ycc != nil {
+						c := ycc.YCbCrAt(sx, sy)
+						r, g, bl = color.YCbCrToRGB(c.Y, c.Cb, c.Cr)
+					} else {
+						r16, g16, b16, _ := src.At(sx, sy).RGBA()
+						r, g, bl = uint8(r16>>8), uint8(g16>>8), uint8(b16>>8)
+					}
+					acc[3*dx] += uint32(r)
+					acc[3*dx+1] += uint32(g)
+					acc[3*dx+2] += uint32(bl)
+				}
+			}
+		}
+		row := dst.Pix[dy*dst.Stride:]
+		for dx := 0; dx < dw; dx++ {
+			row[4*dx] = uint8((acc[3*dx] + n/2) / n)
+			row[4*dx+1] = uint8((acc[3*dx+1] + n/2) / n)
+			row[4*dx+2] = uint8((acc[3*dx+2] + n/2) / n)
+			row[4*dx+3] = 255
+		}
+	}
+	return dst
 }
 
 // exifOrientation mengembalikan nilai tag Orientation (1-8) dari JPEG, atau 1 bila tidak ada.
@@ -127,12 +186,12 @@ func applyOrientation(src *image.RGBA, o int) *image.RGBA {
 }
 
 // validateInput sama dengan is_valid_input() di notebook: menolak gambar yang jelas
-// tidak bisa dianalisis sebelum masuk ke model.
-func validateInput(img *image.RGBA, g InputGuard) (bool, string) {
-	w, h := img.Bounds().Dx(), img.Bounds().Dy()
-	if min(w, h) < g.MinSide {
-		return false, fmt.Sprintf("Resolusi terlalu kecil (%dx%d).", w, h)
+// tidak bisa dianalisis sebelum masuk ke model. origW/origH = ukuran gambar asli.
+func validateInput(img *image.RGBA, origW, origH int, g InputGuard) (bool, string) {
+	if min(origW, origH) < g.MinSide {
+		return false, fmt.Sprintf("Resolusi terlalu kecil (%dx%d).", origW, origH)
 	}
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 
 	gray := make([]float64, w*h)
 	var seen [256]bool
