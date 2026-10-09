@@ -61,7 +61,12 @@ func main() {
 
 	// Batas unggahan bawaan Fiber hanya 4 MB; foto kamera ponsel sering lebih besar.
 	app := fiber.New(fiber.Config{BodyLimit: 20 * 1024 * 1024})
-	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok"}) })
+	// Pemeriksaan kesehatan: dijawab di beberapa path umum supaya lolos apa pun
+	// isi "Health Check Path" di platform hosting.
+	health := func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok"}) }
+	for _, p := range []string{"/", "/health", "/healthz"} {
+		app.Get(p, health)
+	}
 	app.Post("/api/v1/detect-scoliosis", handleDetection)
 
 	fmt.Printf("Server berjalan di port %s\n", port)
