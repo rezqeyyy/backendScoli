@@ -252,17 +252,26 @@ func laplacianStd(gray []float64, w, h int) float64 {
 	return math.Sqrt(math.Max(sumSq/n-mean*mean, 0))
 }
 
-// preprocess: stretch ke size x size (sama dengan praproses dataset), lalu ubah ke
-// tensor float32 berurutan CHW (R, G, B) dengan nilai 0-1.
-func preprocess(img *image.RGBA, size int) []float32 {
+// stretch: ubah ukuran ke size x size tanpa menjaga rasio (sama dengan praproses dataset).
+func stretch(img *image.RGBA, size int) *image.RGBA {
 	dst := image.NewRGBA(image.Rect(0, 0, size, size))
 	draw.BiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Src, nil)
-	plane := size * size
+	return dst
+}
+
+// toTensor: gambar RGBA -> tensor float32 berurutan CHW (R, G, B) dengan nilai 0-1.
+func toTensor(img *image.RGBA) []float32 {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	plane := w * h
 	tensor := make([]float32, 3*plane)
-	for i := 0; i < plane; i++ {
-		tensor[i] = float32(dst.Pix[4*i]) / 255
-		tensor[plane+i] = float32(dst.Pix[4*i+1]) / 255
-		tensor[2*plane+i] = float32(dst.Pix[4*i+2]) / 255
+	for y := 0; y < h; y++ {
+		row := img.Pix[y*img.Stride:]
+		for x := 0; x < w; x++ {
+			i := y*w + x
+			tensor[i] = float32(row[4*x]) / 255
+			tensor[plane+i] = float32(row[4*x+1]) / 255
+			tensor[2*plane+i] = float32(row[4*x+2]) / 255
+		}
 	}
 	return tensor
 }

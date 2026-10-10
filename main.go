@@ -57,7 +57,8 @@ func main() {
 		log.Fatalf("Gagal menyiapkan model: %v", err)
 	}
 	defer engine.Close()
-	log.Printf("Model siap: %d kelas %v, %d keypoint, %d fitur", len(cfg.ClassNames), cfg.ClassNames, cfg.NumKpts(), len(cfg.FeatureNames))
+	log.Printf("Model siap: %d kelas %v, %d keypoint, %d fitur, classifier %s, hapus background %v",
+		len(cfg.ClassNames), cfg.ClassNames, cfg.NumKpts(), len(cfg.FeatureNames), cfg.FinalClassifier, cfg.Background.Enabled)
 
 	// Batas unggahan bawaan Fiber hanya 4 MB; foto kamera ponsel sering lebih besar.
 	app := fiber.New(fiber.Config{BodyLimit: 20 * 1024 * 1024})
@@ -119,6 +120,8 @@ type Result struct {
 	PostureFeatures map[string]float64 `json:"posture_features,omitempty"`
 	Keypoints       []Keypoint         `json:"keypoints,omitempty"`
 	BBox            []float64          `json:"bbox,omitempty"`
+	Classifier      string             `json:"classifier,omitempty"`
+	BgRemoved       *bool              `json:"background_removed,omitempty"`
 	Disclaimer      string             `json:"disclaimer,omitempty"`
 }
 
@@ -146,7 +149,8 @@ func riskFromProbs(probs []float64) (*float64, string) {
 	return nil, "Tidak diketahui"
 }
 
-// Analyze: gambar -> validasi -> YOLOv8 Pose -> fitur postur -> MLP -> hasil.
+// Analyze: gambar -> validasi -> hapus background -> YOLOv8 Pose -> fitur postur dan/atau
+// potongan gambar -> classifier akhir -> hasil. Sama dengan analyze() di notebook.
 func Analyze(data []byte) (*Result, error) {
 	img, origW, origH, err := decodeImage(data)
 	if err != nil {
@@ -156,7 +160,13 @@ func Analyze(data []byte) (*Result, error) {
 		return &Result{Status: "invalid_image", Message: reason}, nil
 	}
 
-	det, err := engine.Detect(preprocess(img, cfg.ImgSize))
+	// Gambar kerja 640x640; background dihapus di sini sebelum model lain melihatnya.
+	work := stretch(img, cfg.ImgSize)
+	bgRemoved, err := engine.RemoveBackground(work)
+	if err != nil {
+		return nil, err
+	}
+	det, err := engine.Detect(toTensor(work))
 	if err != nil {
 		return nil, err
 	}
@@ -178,6 +188,20 @@ func Analyze(data []byte) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	if cfg.UsesCNN() {
+		crop := cropForCNN(work, det.Box, cfg.CNN.CropPad, cfg.CNN.ImgSize, cfg.Background.BgColor)
+		pCNN, err := engine.ClassifyImage(toTensor(crop))
+		if err != nil {
+			return nil, err
+		}
+		for i := range probs {
+			if cfg.FinalClassifier == "resnet" {
+				probs[i] = pCNN[i]
+			} else { // ensemble: rata-rata MLP dan CNN
+				probs[i] = (probs[i] + pCNN[i]) / 2
+			}
+		}
+	}
 	best := 0
 	for i, p := range probs {
 		if p > probs[best] {
@@ -191,6 +215,8 @@ func Analyze(data []byte) (*Result, error) {
 		Label:           cfg.ClassNames[best],
 		Probabilities:   map[string]float64{},
 		PostureFeatures: map[string]float64{},
+		Classifier:      cfg.FinalClassifier,
+		BgRemoved:       &bgRemoved,
 		Disclaimer:      cfg.Disclaimer,
 	}
 	res.RiskScore, res.RiskLevel = riskFromProbs(probs)

@@ -38,6 +38,23 @@ type InputGuard struct {
 	MinEdgeStd       float64 `json:"min_edge_std"`
 }
 
+// Background: pengaturan hapus background dengan YOLOv8-seg. Tidak ada di config lama (= mati).
+type Background struct {
+	Enabled     bool    `json:"enabled"`
+	SegConf     float64 `json:"seg_conf"`
+	PersonClass int     `json:"person_class"`
+	BgColor     int     `json:"bg_color"`
+	MaskDilate  int     `json:"mask_dilate"`
+	MinMaskFrac float64 `json:"min_mask_frac"`
+}
+
+// CNNConfig: pengaturan potongan gambar untuk classifier ResNet.
+type CNNConfig struct {
+	Backbone string  `json:"backbone"`
+	ImgSize  int     `json:"img_size"`
+	CropPad  float64 `json:"crop_pad"`
+}
+
 // Config adalah isi pipeline_config.json yang diekspor notebook (Bagian 14).
 type Config struct {
 	ClassNames      []string   `json:"class_names"`
@@ -59,6 +76,14 @@ type Config struct {
 	FeatureNames    []string   `json:"feature_names"`
 	DisplayFeatures []string   `json:"display_features"`
 	InputGuard      InputGuard `json:"input_guard"`
+	FinalClassifier string     `json:"final_classifier"` // mlp | resnet | ensemble (kosong = mlp)
+	Background      Background `json:"background"`
+	CNN             CNNConfig  `json:"cnn"`
+}
+
+// UsesCNN: apakah classifier akhir membutuhkan scoliosis_cnn.onnx.
+func (c *Config) UsesCNN() bool {
+	return c.FinalClassifier == "resnet" || c.FinalClassifier == "ensemble"
 }
 
 func (c *Config) NumKpts() int { return c.KptShape[0] }
@@ -101,6 +126,19 @@ func (c *Config) validate() error {
 	}
 	if len(c.PairNames) != len(c.Schema.Pairs) || len(c.AxisNames) != len(c.Schema.Axis) {
 		return fmt.Errorf("pair_names/axis_names tidak cocok dengan schema")
+	}
+	switch c.FinalClassifier {
+	case "":
+		c.FinalClassifier = "mlp" // config dari notebook versi pertama
+	case "mlp", "resnet", "ensemble":
+	default:
+		return fmt.Errorf("final_classifier tidak dikenal: %q", c.FinalClassifier)
+	}
+	if c.UsesCNN() && c.CNN.ImgSize <= 0 {
+		return fmt.Errorf("cnn.img_size tidak valid")
+	}
+	if c.Background.Enabled && (c.Background.BgColor < 0 || c.Background.BgColor > 255 || c.Background.PersonClass < 0) {
+		return fmt.Errorf("pengaturan background tidak valid")
 	}
 	for _, p := range c.Schema.Pairs {
 		if len(p) != 2 || p[0] < 0 || p[0] >= k || p[1] < 0 || p[1] >= k {
