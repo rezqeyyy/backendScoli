@@ -107,7 +107,16 @@ type Keypoint struct {
 	Conf float64 `json:"conf"`
 }
 
-// Result adalah respons untuk aplikasi mobile; sama dengan keluaran analyze() di notebook.
+// Overlay: bahan untuk menggambar titik pengukuran di atas foto pada aplikasi.
+// Garis pasangan menghubungkan dua keypoint (misalnya bahu kiri-kanan); sumbu tubuh adalah
+// garis dari atas ke bawah yang dipakai menghitung kemiringan dan simpangan.
+type Overlay struct {
+	Pairs [][2]int     `json:"pairs"` // indeks keypoint yang dihubungkan
+	Axis  [][2]float64 `json:"axis"`  // titik sumbu tubuh berurutan atas -> bawah, koordinat 0-1
+}
+
+// Result adalah respons untuk aplikasi mobile; sama dengan keluaran analyze() di notebook,
+// ditambah `overlay`.
 type Result struct {
 	Status          string             `json:"status"` // ok | invalid_image | no_detection | low_quality
 	Message         string             `json:"message,omitempty"`
@@ -120,6 +129,7 @@ type Result struct {
 	PostureFeatures map[string]float64 `json:"posture_features,omitempty"`
 	Keypoints       []Keypoint         `json:"keypoints,omitempty"`
 	BBox            []float64          `json:"bbox,omitempty"`
+	Overlay         *Overlay           `json:"overlay,omitempty"`
 	Classifier      string             `json:"classifier,omitempty"`
 	BgRemoved       *bool              `json:"background_removed,omitempty"`
 	Disclaimer      string             `json:"disclaimer,omitempty"`
@@ -240,6 +250,18 @@ func Analyze(data []byte) (*Result, error) {
 	}
 	for _, v := range det.Box {
 		res.BBox = append(res.BBox, round(v/size, 4))
+	}
+	// Garis bantu untuk overlay: pasangan kiri-kanan dan sumbu tubuh, dalam koordinat 0-1.
+	norm := make([][2]float64, len(det.Kpts))
+	for i, k := range det.Kpts {
+		norm[i] = [2]float64{k[0] / size, k[1] / size}
+	}
+	res.Overlay = &Overlay{Pairs: [][2]int{}, Axis: [][2]float64{}}
+	for _, p := range cfg.Schema.Pairs {
+		res.Overlay.Pairs = append(res.Overlay.Pairs, [2]int{p[0], p[1]})
+	}
+	for _, a := range cfg.axisPoints(norm) {
+		res.Overlay.Axis = append(res.Overlay.Axis, [2]float64{round(a[0], 4), round(a[1], 4)})
 	}
 	return res, nil
 }

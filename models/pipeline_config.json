@@ -82,11 +82,11 @@
       ],
       [
         "k",
-        10
+        9
       ],
       [
         "k",
-        12
+        11
       ]
     ],
     "pair_source": "flip_idx dari data.yaml"
@@ -99,8 +99,8 @@
     "kp13",
     "kp3",
     "kp6",
-    "kp10",
-    "kp12"
+    "kp9",
+    "kp11"
   ],
   "feature_names": [
     "x_kp0",
@@ -144,7 +144,7 @@
     "lateral_dev_kp13",
     "lateral_dev_kp3",
     "lateral_dev_kp6",
-    "lateral_dev_kp10",
+    "lateral_dev_kp9",
     "lateral_dev_max_abs",
     "lateral_dev_range",
     "curve_angle_deg"
