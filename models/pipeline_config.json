@@ -16,7 +16,7 @@
   "disclaimer": "Hasil ini adalah skrining awal berbasis AI, bukan diagnosis medis. Konsultasikan dengan dokter untuk pemeriksaan lebih lanjut.",
   "img_size": 640,
   "stretch_to_square": true,
-  "det_conf": 0.4,
+  "det_conf": 0.3,
   "kpt_conf": 0.5,
   "min_visible_kpts": 11,
   "review_threshold": 0.6,
@@ -172,7 +172,7 @@
   },
   "calibration": {
     "mlp_temperature": 0.25,
-    "cnn_temperature": 1.2682
+    "cnn_temperature": 1.1671
   },
   "detect_on_original": true,
   "input_guard": {

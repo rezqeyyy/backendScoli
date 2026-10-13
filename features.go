@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"sort"
 )
 
 const rad2deg = 180.0 / math.Pi
@@ -61,6 +62,9 @@ func (c *Config) axisPoints(p [][2]float64) [][2]float64 {
 			a = append(a, [2]float64{(p[l][0] + p[r][0]) / 2, (p[l][1] + p[r][1]) / 2})
 		}
 	}
+	// Urutkan dari atas ke bawah: model kadang menukar nomor ruas tulang belakang,
+	// dan urutan yang tertukar membuat sudut antar-ruas palsu. Sama dengan axis_points() di notebook.
+	sort.SliceStable(a, func(i, j int) bool { return a[i][1] < a[j][1] })
 	return a
 }
 
