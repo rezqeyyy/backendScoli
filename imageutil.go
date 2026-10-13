@@ -252,6 +252,13 @@ func laplacianStd(gray []float64, w, h int) float64 {
 	return math.Sqrt(math.Max(sumSq/n-mean*mean, 0))
 }
 
+// cloneRGBA: salinan gambar yang bisa diubah tanpa menyentuh aslinya.
+func cloneRGBA(src *image.RGBA) *image.RGBA {
+	dst := image.NewRGBA(src.Bounds())
+	copy(dst.Pix, src.Pix)
+	return dst
+}
+
 // stretch: ubah ukuran ke size x size tanpa menjaga rasio (sama dengan praproses dataset).
 func stretch(img *image.RGBA, size int) *image.RGBA {
 	dst := image.NewRGBA(image.Rect(0, 0, size, size))

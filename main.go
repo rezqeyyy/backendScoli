@@ -59,6 +59,9 @@ func main() {
 	defer engine.Close()
 	log.Printf("Model siap: %d kelas %v, %d keypoint, %d fitur, classifier %s, hapus background %v",
 		len(cfg.ClassNames), cfg.ClassNames, cfg.NumKpts(), len(cfg.FeatureNames), cfg.FinalClassifier, cfg.Background.Enabled)
+	log.Printf("Ambang: det_conf %.2f, kpt_conf %.2f, min_visible_kpts %d, risiko %v; kalibrasi T mlp %.2f, cnn %.2f; coba gambar asli %v",
+		cfg.DetConf, cfg.KptConf, cfg.MinVisibleKpts, cfg.RiskThresholds,
+		temperature(cfg.Calibration.MLPTemperature), temperature(cfg.Calibration.CNNTemperature), cfg.detectOnOriginal())
 
 	// Batas unggahan bawaan Fiber hanya 4 MB; foto kamera ponsel sering lebih besar.
 	app := fiber.New(fiber.Config{BodyLimit: 20 * 1024 * 1024})
@@ -159,6 +162,36 @@ func riskFromProbs(probs []float64) (*float64, string) {
 	return nil, "Tidak diketahui"
 }
 
+// countVisible: jumlah keypoint dengan confidence di atas kpt_conf (0 bila tidak ada deteksi).
+func countVisible(d *Detection) int {
+	if d == nil {
+		return 0
+	}
+	n := 0
+	for _, k := range d.Kpts {
+		if k[2] > cfg.KptConf {
+			n++
+		}
+	}
+	return n
+}
+
+// betterDetection: a lebih baik dari b bila keypoint yang terlihat lebih banyak,
+// atau sama banyak tapi confidence deteksinya lebih tinggi.
+func betterDetection(a, b *Detection) bool {
+	if a == nil {
+		return false
+	}
+	if b == nil {
+		return true
+	}
+	va, vb := countVisible(a), countVisible(b)
+	if va != vb {
+		return va > vb
+	}
+	return a.Conf > b.Conf
+}
+
 // Analyze: gambar -> validasi -> hapus background -> YOLOv8 Pose -> fitur postur dan/atau
 // potongan gambar -> classifier akhir -> hasil. Sama dengan analyze() di notebook.
 func Analyze(data []byte) (*Result, error) {
@@ -170,8 +203,10 @@ func Analyze(data []byte) (*Result, error) {
 		return &Result{Status: "invalid_image", Message: reason}, nil
 	}
 
-	// Gambar kerja 640x640; background dihapus di sini sebelum model lain melihatnya.
-	work := stretch(img, cfg.ImgSize)
+	// Gambar kerja 640x640. Salinan asli disimpan untuk percobaan kedua bila deteksi
+	// pada gambar tanpa background gagal (misalnya siluet orang terpotong).
+	original := stretch(img, cfg.ImgSize)
+	work := cloneRGBA(original)
 	bgRemoved, err := engine.RemoveBackground(work)
 	if err != nil {
 		return nil, err
@@ -180,17 +215,21 @@ func Analyze(data []byte) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if det == nil {
-		return &Result{Status: "no_detection", Message: "Punggung tidak terdeteksi dengan yakin. Ambil ulang foto."}, nil
-	}
-	visible := 0
-	for _, k := range det.Kpts {
-		if k[2] > cfg.KptConf {
-			visible++
+	if bgRemoved && cfg.detectOnOriginal() && countVisible(det) < cfg.MinVisibleKpts {
+		alt, err := engine.Detect(toTensor(original))
+		if err != nil {
+			return nil, err
+		}
+		if betterDetection(alt, det) {
+			det, work, bgRemoved = alt, original, false
 		}
 	}
+	if det == nil {
+		return &Result{Status: "no_detection", Message: "Punggung tidak terdeteksi dengan yakin. Pastikan punggung dari leher sampai pinggul memenuhi bingkai, lalu ambil ulang foto."}, nil
+	}
+	visible := countVisible(det)
 	if visible < cfg.MinVisibleKpts {
-		return &Result{Status: "low_quality", Message: fmt.Sprintf("Hanya %d dari %d titik tubuh yang terlihat jelas. Ambil ulang foto.", visible, len(det.Kpts))}, nil
+		return &Result{Status: "low_quality", Message: fmt.Sprintf("Hanya %d dari %d titik tubuh yang terlihat jelas. Pastikan punggung tidak tertutup baju atau rambut, lalu ambil ulang foto.", visible, len(det.Kpts))}, nil
 	}
 
 	names, feats := cfg.PostureFeatures(det.Kpts)
@@ -198,12 +237,15 @@ func Analyze(data []byte) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Temperature scaling: probabilitas mentah model cenderung ekstrem (0% atau 100%).
+	probs = calibrate(probs, cfg.Calibration.MLPTemperature)
 	if cfg.UsesCNN() {
 		crop := cropForCNN(work, det.Box, cfg.CNN.CropPad, cfg.CNN.ImgSize, cfg.Background.BgColor)
 		pCNN, err := engine.ClassifyImage(toTensor(crop))
 		if err != nil {
 			return nil, err
 		}
+		pCNN = calibrate(pCNN, cfg.Calibration.CNNTemperature)
 		for i := range probs {
 			if cfg.FinalClassifier == "resnet" {
 				probs[i] = pCNN[i]
