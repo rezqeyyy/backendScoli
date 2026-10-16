@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -33,6 +34,33 @@ type Detection struct {
 	Conf  float64
 }
 
+// lowMemoryOptions: pengaturan sesi supaya muat di server kecil (Render gratis = 512 MB).
+// Arena memori dan memory pattern ONNX Runtime menyimpan blok memori besar per model;
+// dimatikan supaya memori dikembalikan setelah tiap analisis. Jumlah thread dibatasi
+// (ORT_THREADS, bawaan 1) karena tiap thread juga memakan memori.
+func lowMemoryOptions() (*ort.SessionOptions, error) {
+	o, err := ort.NewSessionOptions()
+	if err != nil {
+		return nil, err
+	}
+	threads, convErr := strconv.Atoi(envOr("ORT_THREADS", "1"))
+	if convErr != nil || threads < 1 {
+		threads = 1
+	}
+	for _, set := range []func() error{
+		func() error { return o.SetCpuMemArena(false) },
+		func() error { return o.SetMemPattern(false) },
+		func() error { return o.SetIntraOpNumThreads(threads) },
+		func() error { return o.SetInterOpNumThreads(1) },
+	} {
+		if err := set(); err != nil {
+			o.Destroy()
+			return nil, err
+		}
+	}
+	return o, nil
+}
+
 // openSession membaca nama input/output model lalu membuka sesinya.
 func openSession(path string, nIn, nOut int) (*ort.DynamicAdvancedSession, []ort.InputOutputInfo, []ort.InputOutputInfo, error) {
 	in, out, err := ort.GetInputOutputInfo(path)
@@ -49,7 +77,12 @@ func openSession(path string, nIn, nOut int) (*ort.DynamicAdvancedSession, []ort
 	for i := range outNames {
 		outNames[i] = out[i].Name
 	}
-	s, err := ort.NewDynamicAdvancedSession(path, inNames, outNames, nil)
+	opts, err := lowMemoryOptions()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer opts.Destroy()
+	s, err := ort.NewDynamicAdvancedSession(path, inNames, outNames, opts)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("gagal memuat %s: %w", path, err)
 	}

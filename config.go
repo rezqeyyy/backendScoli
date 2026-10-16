@@ -212,7 +212,7 @@ func (c *Config) validate() error {
 // tanpa mengekspor ulang model. Kosong = pakai nilai dari pipeline_config.json.
 //
 //	DET_CONF, KPT_CONF, MIN_VISIBLE_KPTS, MLP_TEMPERATURE, CNN_TEMPERATURE,
-//	RISK_THRESHOLDS ("0.35,0.65"), DETECT_ON_ORIGINAL ("true"/"false")
+//	RISK_THRESHOLDS ("0.35,0.65"), DETECT_ON_ORIGINAL ("true"/"false"), FINAL_CLASSIFIER (mlp/resnet/ensemble)
 func (c *Config) applyEnvOverrides() error {
 	num := func(key string, dst *float64) error {
 		if v := os.Getenv(key); v != "" {
@@ -255,6 +255,10 @@ func (c *Config) applyEnvOverrides() error {
 			t[i] = f
 		}
 		c.RiskThresholds = t
+	}
+	// FINAL_CLASSIFIER=mlp: ResNet tidak dimuat sama sekali (hemat sekitar 200-300 MB RAM).
+	if v := strings.TrimSpace(os.Getenv("FINAL_CLASSIFIER")); v != "" {
+		c.FinalClassifier = v
 	}
 	if v := os.Getenv("DETECT_ON_ORIGINAL"); v != "" {
 		b, err := strconv.ParseBool(strings.TrimSpace(v))

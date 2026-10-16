@@ -44,9 +44,9 @@ func main() {
 	modelsDir := envOr("MODELS_DIR", "models")
 	libPath := envOr("ONNXRUNTIME_LIB", defaultLibPath())
 	port := envOr("PORT", "3000")
-	maxConcurrent, err := strconv.Atoi(envOr("MAX_CONCURRENT", "2"))
+	maxConcurrent, err := strconv.Atoi(envOr("MAX_CONCURRENT", "1"))
 	if err != nil || maxConcurrent < 1 {
-		maxConcurrent = 2
+		maxConcurrent = 1
 	}
 	slots = make(chan struct{}, maxConcurrent)
 
