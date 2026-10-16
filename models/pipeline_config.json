@@ -16,7 +16,7 @@
   "disclaimer": "Hasil ini adalah skrining awal berbasis AI, bukan diagnosis medis. Konsultasikan dengan dokter untuk pemeriksaan lebih lanjut.",
   "img_size": 640,
   "stretch_to_square": true,
-  "det_conf": 0.3,
+  "det_conf": 0.2,
   "kpt_conf": 0.5,
   "min_visible_kpts": 11,
   "review_threshold": 0.6,
@@ -42,43 +42,22 @@
     "kp14"
   ],
   "schema": {
-    "pairs": [
-      [
-        0,
-        1
-      ]
-    ],
+    "pairs": [],
     "midline": [
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
+      0,
+      1,
       9,
       10,
-      11,
-      12,
-      13,
-      14
+      11
     ],
     "axis": [
       [
-        "p",
+        "k",
         0
       ],
       [
         "k",
-        13
-      ],
-      [
-        "k",
-        3
-      ],
-      [
-        "k",
-        6
+        1
       ],
       [
         "k",
@@ -89,74 +68,33 @@
         11
       ]
     ],
-    "pair_source": "flip_idx dari data.yaml"
+    "pair_source": "heuristik posisi rata-rata"
   },
-  "pair_names": [
-    "kp0-kp1"
-  ],
+  "pair_names": [],
   "axis_names": [
-    "mid(kp0-kp1)",
-    "kp13",
-    "kp3",
-    "kp6",
+    "kp0",
+    "kp1",
     "kp9",
     "kp11"
   ],
   "feature_names": [
-    "x_kp0",
-    "y_kp0",
-    "x_kp1",
-    "y_kp1",
-    "x_kp2",
-    "y_kp2",
-    "x_kp3",
-    "y_kp3",
-    "x_kp4",
-    "y_kp4",
-    "x_kp5",
-    "y_kp5",
-    "x_kp6",
-    "y_kp6",
-    "x_kp7",
-    "y_kp7",
-    "x_kp8",
-    "y_kp8",
-    "x_kp9",
-    "y_kp9",
-    "x_kp10",
-    "y_kp10",
-    "x_kp11",
-    "y_kp11",
-    "x_kp12",
-    "y_kp12",
-    "x_kp13",
-    "y_kp13",
-    "x_kp14",
-    "y_kp14",
-    "tilt_kp0-kp1_deg",
-    "width_kp0-kp1",
     "trunk_lean_deg",
     "seg_angle_0_deg",
     "seg_angle_1_deg",
     "seg_angle_2_deg",
-    "seg_angle_3_deg",
-    "seg_angle_4_deg",
-    "lateral_dev_kp13",
-    "lateral_dev_kp3",
-    "lateral_dev_kp6",
+    "lateral_dev_kp1",
     "lateral_dev_kp9",
     "lateral_dev_max_abs",
     "lateral_dev_range",
     "curve_angle_deg"
   ],
   "display_features": [
-    "tilt_kp0-kp1_deg",
     "trunk_lean_deg",
     "lateral_dev_max_abs",
     "lateral_dev_range",
     "curve_angle_deg"
   ],
-  "final_classifier": "mlp",
+  "final_classifier": "ensemble",
   "background": {
     "enabled": true,
     "seg_conf": 0.25,
@@ -171,15 +109,23 @@
     "crop_pad": 0.1
   },
   "calibration": {
-    "mlp_temperature": 0.25,
-    "cnn_temperature": 1.1671
+    "mlp_temperature": 1.0,
+    "cnn_temperature": 1.103
   },
   "detect_on_original": true,
+  "feature_kpts": [
+    0,
+    1,
+    9,
+    10,
+    11
+  ],
+  "use_raw_coords": false,
   "input_guard": {
     "min_side": 256,
     "require_grayscale": false,
     "max_saturation": 40,
     "min_unique_gray": 64,
-    "min_edge_std": 8.0
+    "min_edge_std": 2.9302468603821294
   }
 }

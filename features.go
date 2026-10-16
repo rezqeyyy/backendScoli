@@ -11,20 +11,27 @@ const rad2deg = 180.0 / math.Pi
 // normalizeKeypoints sama dengan normalize_keypoints() di notebook:
 // koordinat dikurangi rata-rata keypoint yang terlihat, lalu dibagi sebarannya.
 func (c *Config) normalizeKeypoints(kpts [][3]float64) [][2]float64 {
+	// Pusat dan skala hanya dari keypoint fitur (feature_kpts), sama dengan notebook.
 	k := len(kpts)
+	use := make([]bool, k)
+	for _, i := range c.featureKpts() {
+		use[i] = true
+	}
 	vis := make([]bool, k)
 	n := 0
 	for i := range kpts {
-		if kpts[i][2] > c.KptConf {
+		if use[i] && kpts[i][2] > c.KptConf {
 			vis[i] = true
 			n++
 		}
 	}
 	if n == 0 {
-		for i := range vis {
-			vis[i] = true
+		copy(vis, use)
+		for _, v := range use {
+			if v {
+				n++
+			}
 		}
-		n = k
 	}
 	var cx, cy float64
 	for i := range kpts {
@@ -79,9 +86,11 @@ func (c *Config) PostureFeatures(kpts [][3]float64) ([]string, []float64) {
 		vals = append(vals, v)
 	}
 
-	for i := range p {
-		add("x_"+c.KptNames[i], p[i][0])
-		add("y_"+c.KptNames[i], p[i][1])
+	if c.useRawCoords() {
+		for _, i := range c.featureKpts() {
+			add("x_"+c.KptNames[i], p[i][0])
+			add("y_"+c.KptNames[i], p[i][1])
+		}
 	}
 
 	tilts := make([]float64, 0, len(c.Schema.Pairs))

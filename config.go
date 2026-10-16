@@ -94,6 +94,10 @@ type Config struct {
 	// DetectOnOriginal: bila deteksi pada gambar tanpa background gagal atau kurang jelas,
 	// coba lagi pada gambar asli. Tidak ada di config = aktif.
 	DetectOnOriginal *bool `json:"detect_on_original"`
+	// FeatureKpts: keypoint yang dipakai untuk fitur (kosong = semua). UseRawCoords: koordinat mentah
+	// tiap keypoint ikut jadi fitur (tidak ada di config = ya, sama dengan config lama).
+	FeatureKpts  []int `json:"feature_kpts"`
+	UseRawCoords *bool `json:"use_raw_coords"`
 }
 
 // UsesCNN: apakah classifier akhir membutuhkan scoliosis_cnn.onnx.
@@ -186,6 +190,11 @@ func (c *Config) validate() error {
 			return fmt.Errorf("jenis node sumbu tidak dikenal: %q", n.Kind)
 		}
 	}
+	for _, i := range c.FeatureKpts {
+		if i < 0 || i >= k {
+			return fmt.Errorf("feature_kpts berisi indeks keypoint yang tidak valid")
+		}
+	}
 	// Urutan fitur di Go harus persis sama dengan Python, karena MLP dilatih dengan urutan itu.
 	names, _ := c.PostureFeatures(make([][3]float64, k))
 	if len(names) != len(c.FeatureNames) {
@@ -255,6 +264,23 @@ func (c *Config) applyEnvOverrides() error {
 		c.DetectOnOriginal = &b
 	}
 	return nil
+}
+
+// useRawCoords: nilai bawaan ya (config lama).
+func (c *Config) useRawCoords() bool {
+	return c.UseRawCoords == nil || *c.UseRawCoords
+}
+
+// featureKpts: indeks keypoint untuk fitur; kosong = semua.
+func (c *Config) featureKpts() []int {
+	if len(c.FeatureKpts) > 0 {
+		return c.FeatureKpts
+	}
+	all := make([]int, c.NumKpts())
+	for i := range all {
+		all[i] = i
+	}
+	return all
 }
 
 // detectOnOriginal: nilai bawaan aktif.
