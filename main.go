@@ -250,8 +250,9 @@ func Analyze(data []byte) (*Result, error) {
 		for i := range probs {
 			if cfg.FinalClassifier == "resnet" {
 				probs[i] = pCNN[i]
-			} else { // ensemble: rata-rata MLP dan CNN
-				probs[i] = (probs[i] + pCNN[i]) / 2
+			} else { // ensemble: rata-rata berbobot MLP dan CNN
+				w := cfg.ensembleWeight()
+				probs[i] = w*pCNN[i] + (1-w)*probs[i]
 			}
 		}
 	}

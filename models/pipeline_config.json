@@ -5,8 +5,8 @@
   ],
   "normal_class": "normal",
   "risk_thresholds": [
-    0.365,
-    0.48
+    0.35,
+    0.65
   ],
   "risk_levels": [
     "Rendah",
@@ -95,6 +95,7 @@
     "curve_angle_deg"
   ],
   "final_classifier": "ensemble",
+  "ensemble_weight": 0.5,
   "background": {
     "enabled": true,
     "seg_conf": 0.25,
@@ -109,7 +110,7 @@
     "crop_pad": 0.1
   },
   "calibration": {
-    "mlp_temperature": 1.0,
+    "mlp_temperature": 0.845,
     "cnn_temperature": 1.1218
   },
   "detect_on_original": true,

@@ -68,29 +68,31 @@ type CNNConfig struct {
 
 // Config adalah isi pipeline_config.json yang diekspor notebook (Bagian 14).
 type Config struct {
-	ClassNames      []string    `json:"class_names"`
-	NormalClass     string      `json:"normal_class"`
-	RiskThresholds  []float64   `json:"risk_thresholds"`
-	RiskLevels      []string    `json:"risk_levels"`
-	Disclaimer      string      `json:"disclaimer"`
-	ImgSize         int         `json:"img_size"`
-	StretchToSquare bool        `json:"stretch_to_square"`
-	DetConf         float64     `json:"det_conf"`
-	KptConf         float64     `json:"kpt_conf"`
-	MinVisibleKpts  int         `json:"min_visible_kpts"`
-	ReviewThreshold float64     `json:"review_threshold"`
-	KptShape        []int       `json:"kpt_shape"`
-	KptNames        []string    `json:"kpt_names"`
-	Schema          Schema      `json:"schema"`
-	PairNames       []string    `json:"pair_names"`
-	AxisNames       []string    `json:"axis_names"`
-	FeatureNames    []string    `json:"feature_names"`
-	DisplayFeatures []string    `json:"display_features"`
-	InputGuard      InputGuard  `json:"input_guard"`
-	FinalClassifier string      `json:"final_classifier"` // mlp | resnet | ensemble (kosong = mlp)
-	Background      Background  `json:"background"`
-	CNN             CNNConfig   `json:"cnn"`
-	Calibration     Calibration `json:"calibration"`
+	ClassNames      []string   `json:"class_names"`
+	NormalClass     string     `json:"normal_class"`
+	RiskThresholds  []float64  `json:"risk_thresholds"`
+	RiskLevels      []string   `json:"risk_levels"`
+	Disclaimer      string     `json:"disclaimer"`
+	ImgSize         int        `json:"img_size"`
+	StretchToSquare bool       `json:"stretch_to_square"`
+	DetConf         float64    `json:"det_conf"`
+	KptConf         float64    `json:"kpt_conf"`
+	MinVisibleKpts  int        `json:"min_visible_kpts"`
+	ReviewThreshold float64    `json:"review_threshold"`
+	KptShape        []int      `json:"kpt_shape"`
+	KptNames        []string   `json:"kpt_names"`
+	Schema          Schema     `json:"schema"`
+	PairNames       []string   `json:"pair_names"`
+	AxisNames       []string   `json:"axis_names"`
+	FeatureNames    []string   `json:"feature_names"`
+	DisplayFeatures []string   `json:"display_features"`
+	InputGuard      InputGuard `json:"input_guard"`
+	FinalClassifier string     `json:"final_classifier"` // mlp | resnet | ensemble (kosong = mlp)
+	// EnsembleWeight: bobot CNN pada gabungan (skor = w*CNN + (1-w)*MLP). Tidak ada di config = 0.5.
+	EnsembleWeight *float64    `json:"ensemble_weight"`
+	Background     Background  `json:"background"`
+	CNN            CNNConfig   `json:"cnn"`
+	Calibration    Calibration `json:"calibration"`
 	// DetectOnOriginal: bila deteksi pada gambar tanpa background gagal atau kurang jelas,
 	// coba lagi pada gambar asli. Tidak ada di config = aktif.
 	DetectOnOriginal *bool `json:"detect_on_original"`
@@ -98,6 +100,14 @@ type Config struct {
 	// tiap keypoint ikut jadi fitur (tidak ada di config = ya, sama dengan config lama).
 	FeatureKpts  []int `json:"feature_kpts"`
 	UseRawCoords *bool `json:"use_raw_coords"`
+}
+
+// ensembleWeight: bobot CNN pada gabungan, 0.5 bila tidak diatur.
+func (c *Config) ensembleWeight() float64 {
+	if c.EnsembleWeight == nil {
+		return 0.5
+	}
+	return *c.EnsembleWeight
 }
 
 // UsesCNN: apakah classifier akhir membutuhkan scoliosis_cnn.onnx.
@@ -164,6 +174,9 @@ func (c *Config) validate() error {
 	case "mlp", "resnet", "ensemble":
 	default:
 		return fmt.Errorf("final_classifier tidak dikenal: %q", c.FinalClassifier)
+	}
+	if w := c.ensembleWeight(); w < 0 || w > 1 {
+		return fmt.Errorf("ensemble_weight harus 0 sampai 1")
 	}
 	if c.UsesCNN() && c.CNN.ImgSize <= 0 {
 		return fmt.Errorf("cnn.img_size tidak valid")
