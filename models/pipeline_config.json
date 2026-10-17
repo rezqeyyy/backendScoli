@@ -5,8 +5,8 @@
   ],
   "normal_class": "normal",
   "risk_thresholds": [
-    0.37,
-    0.474
+    0.365,
+    0.48
   ],
   "risk_levels": [
     "Rendah",
@@ -104,13 +104,13 @@
     "min_mask_frac": 0.05
   },
   "cnn": {
-    "backbone": "resnet50",
+    "backbone": "efficientnet_b0",
     "img_size": 224,
     "crop_pad": 0.1
   },
   "calibration": {
     "mlp_temperature": 1.0,
-    "cnn_temperature": 1.0844
+    "cnn_temperature": 1.1218
   },
   "detect_on_original": true,
   "feature_kpts": [
