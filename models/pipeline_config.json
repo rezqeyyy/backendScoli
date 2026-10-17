@@ -5,8 +5,8 @@
   ],
   "normal_class": "normal",
   "risk_thresholds": [
-    0.33,
-    0.53
+    0.37,
+    0.474
   ],
   "risk_levels": [
     "Rendah",
@@ -110,7 +110,7 @@
   },
   "calibration": {
     "mlp_temperature": 1.0,
-    "cnn_temperature": 1.4721
+    "cnn_temperature": 1.0844
   },
   "detect_on_original": true,
   "feature_kpts": [
