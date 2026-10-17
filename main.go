@@ -126,6 +126,7 @@ type Result struct {
 	Label           string             `json:"label,omitempty"`
 	RiskScore       *float64           `json:"risk_score,omitempty"`
 	RiskLevel       string             `json:"risk_level,omitempty"`
+	RiskThresholds  []float64          `json:"risk_thresholds,omitempty"` // batas Rendah|Sedang dan Sedang|Tinggi, untuk skala di aplikasi
 	Confidence      *float64           `json:"confidence,omitempty"`
 	NeedsReview     *bool              `json:"needs_review,omitempty"`
 	Probabilities   map[string]float64 `json:"probabilities,omitempty"`
@@ -272,6 +273,7 @@ func Analyze(data []byte) (*Result, error) {
 		Disclaimer:      cfg.Disclaimer,
 	}
 	res.RiskScore, res.RiskLevel = riskFromProbs(probs)
+	res.RiskThresholds = []float64{round(cfg.RiskThresholds[0], 3), round(cfg.RiskThresholds[1], 3)}
 	conf := round(probs[best], 3)
 	review := probs[best] < cfg.ReviewThreshold
 	res.Confidence, res.NeedsReview = &conf, &review
